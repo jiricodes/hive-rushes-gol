@@ -23,13 +23,13 @@ struct LifeState {
 
 impl LifeState {
     fn neighbours_count(&self, x: i64, y: i64) -> u8 {
-        let mut ret = 0;
-        for (nx, ny) in NEIGHBORS {
+        NEIGHBORS.iter().fold(0, |acc, (nx, ny)| {
             if self.data[(nx + x) as usize][(ny + y) as usize] {
-                ret += 1
+                acc + 1
+            } else {
+                acc + 0
             }
-        }
-        ret
+        })
     }
 }
 

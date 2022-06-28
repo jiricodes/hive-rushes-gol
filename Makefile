@@ -6,7 +6,7 @@
 #    By: jnovotny <jnovotny@student.hive.fi>        +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2022/06/28 09:32:05 by jnovotny          #+#    #+#              #
-#    Updated: 2022/06/28 09:41:49 by jnovotny         ###   ########.fr        #
+#    Updated: 2022/06/28 11:41:53 by jnovotny         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -33,6 +33,13 @@ run-simple:
 	cargo build -p simple --release
 	cp target/release/simple $(BIN_DIR)
 	(cd resources; ./test.sh ../$(BIN_DIR)/simple)
+
+run-opt_01:
+	cargo test -p opt_01
+	make folders $(MAKEOPTS)
+	cargo build -p opt_01 --release
+	cp target/release/opt_01 $(BIN_DIR)
+	(cd resources; ./test.sh ../$(BIN_DIR)/opt_01)
 
 clean:
 	cargo clean
