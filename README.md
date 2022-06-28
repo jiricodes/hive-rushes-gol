@@ -6,6 +6,8 @@ This was a 48h timed project at Hive coding school, in June 2022. Unfortunately 
 My start time: Jun 27, 2022 19:30
 My end time: N/A
 
+Timelog:
+- Jun 27 ~2hrs
 
 ## Goal
 Write working version of [Game of Life](https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life) and then try to optimize it as much as possible.

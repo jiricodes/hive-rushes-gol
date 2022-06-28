@@ -14,6 +14,7 @@ const NEIGHBORS: [(i64, i64); 8] = [
     (1, 1),
 ];
 
+#[derive(Debug, PartialEq, Clone)]
 struct LifeState {
     width: usize,
     height: usize,
@@ -191,6 +192,9 @@ mod test {
 
     #[test]
     fn rule_s2() {
+        // ...
+        // XXX
+        // ...
         let mut life = LifeState {
             width: 3,
             height: 3,
@@ -201,7 +205,205 @@ mod test {
         life.data[3] = true;
         life.data[5] = true;
 
-        let life = life.next().unwrap();
+        let init_state = life.clone();
+
+        // .X.
+        // .X.
+        // .X.
+        let life2 = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![false, true, false, false, true, false, false, true, false],
+        };
+        let mut life = life.next().unwrap();
         assert_eq!(life.data[4], true);
+        assert_eq!(life, life2);
+
+        // with next iteration the life should return to previous state
+        let life = life.next().unwrap();
+        assert_eq!(life, init_state);
+    }
+
+    #[test]
+    fn rule_s3() {
+        // ...
+        // XXX
+        // X..
+        let init_state = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![false, false, false, true, true, true, true, false, false],
+        };
+
+        let mut life = init_state.clone();
+
+        // .X.
+        // XX.
+        // X..
+        let life_next = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![false, true, false, true, true, false, true, false, false],
+        };
+        let mut life = life.next().unwrap();
+        assert_eq!(life.data[4], true); // S3
+        assert_eq!(life, life_next);
+
+        // XX.
+        // XX.
+        // XX.
+        let life_next = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![true, true, false, true, true, false, true, true, false],
+        };
+        let life = life.next().unwrap();
+        assert_eq!(life, life_next);
+    }
+
+    #[test]
+    fn rule_b3() {
+        // X..
+        // ...
+        // X.X
+        let init_state = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![true, false, false, false, false, false, true, false, true],
+        };
+
+        let mut life = init_state.clone();
+        // ...
+        // .X.
+        // ...
+        let life_next = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![false, false, false, false, true, false, false, false, false],
+        };
+        let life = life.next().unwrap();
+        assert_eq!(life.data[4], true); // B3
+        assert_eq!(life, life_next);
+    }
+
+    /// Tests that the results outside of ruleset work
+    /// L0, L1, L4, L5, L6, L7, L8 -> D
+    /// D0-2, D4-8 -> D
+    #[test]
+    fn no_rule() {
+        // L0 -> D
+        // ...
+        // .X.
+        // ...
+        let mut life = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![false, false, false, false, true, false, false, false, false],
+        };
+
+        let life = life.next().unwrap();
+        assert_eq!(life.data[4], false); // L0
+
+        // L1 -> D
+        // X..
+        // .X.
+        // ...
+        let mut life = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![true, false, false, false, true, false, false, false, false],
+        };
+
+        let life = life.next().unwrap();
+        assert_eq!(life.data[4], false); // L1
+
+        // L4 -> D
+        // XXX
+        // XX.
+        // ...
+        let mut life = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![true, true, true, true, true, false, false, false, false],
+        };
+
+        let life = life.next().unwrap();
+        assert_eq!(life.data[4], false); // L4
+
+        // L5 -> D
+        // XXX
+        // XXX
+        // ...
+        let mut life = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![true, true, true, true, true, true, false, false, false],
+        };
+
+        let life = life.next().unwrap();
+        assert_eq!(life.data[4], false); // L5
+
+        // L6 -> D
+        // XXX
+        // XXX
+        // X..
+        let mut life = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![true, true, true, true, true, true, true, false, false],
+        };
+
+        let life = life.next().unwrap();
+        assert_eq!(life.data[4], false); // L6
+
+        // L7 -> D
+        // XXX
+        // XXX
+        // XX.
+        let mut life = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![true, true, true, true, true, true, true, true, false],
+        };
+
+        let life = life.next().unwrap();
+        assert_eq!(life.data[4], false); // L7
+
+        // L8 -> D
+        // XXX
+        // XXX
+        // XXX
+        let mut life = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![true, true, true, true, true, true, true, true, true],
+        };
+
+        let life = life.next().unwrap();
+        assert_eq!(life.data[4], false); // L8
+
+        // Dead stays dead loop
+        // ...
+        // ...
+        // ...
+        let mut init_state = LifeState {
+            width: 3,
+            height: 3,
+            data: vec![false; 9],
+        };
+
+        for i in 0..9 {
+            if i != 4 {
+                init_state.data[i] = true;
+            }
+            let life = init_state.next().unwrap();
+            // the cell should remain dead if i != 2 aka neighbours_count is != 3
+            if i != 2 {
+                assert_eq!(life.data[4], false);
+            } else {
+                // we can check the rule here, why not
+                assert_eq!(life.data[4], true);
+            }
+        }
     }
 }
