@@ -1,2 +1,5 @@
 [workspace]
-members = ["simple"]
+members = ["simple", "opt_01"]
+
+[profile.release]
+debug = true

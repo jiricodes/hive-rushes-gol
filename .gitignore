@@ -17,3 +17,10 @@ resources/dinnertable
 resources/empty
 resources/random
 resources/test.sh
+
+# binaries
+bins/
+
+# perf
+perf.*
+flamegraph.svg

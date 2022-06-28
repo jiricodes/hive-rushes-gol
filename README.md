@@ -44,3 +44,6 @@ Bonuses
 The most basic implementation with no designed optimizations to complete the project according to instructions.
 
 Only optimizations involved were in standard `cargo build --release` [compilation settings](https://doc.rust-lang.org/cargo/reference/profiles.html#release).
+
+### [opt_01](opt_01/)
+According to [flamegraph](https://github.com/flamegraph-rs/flamegraph) the `simple` version spent 93% of the time in [`neighbours_count()`](simple/src/main.rs)[line 25]. So this version tries to iprove that.
