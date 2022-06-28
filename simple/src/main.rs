@@ -51,10 +51,8 @@ impl Iterator for LifeState {
         };
         for (i, val) in self.data.iter().enumerate() {
             let neighbours_count = self.neighbours_count(i);
-            let new_val = match (val, neighbours_count) {
-                (true, 2) | (true, 3) | (false, 3) => true,
-                _ => false,
-            };
+            // Cargo clippy sugestion over match expression
+            let new_val = matches!((val, neighbours_count), (true, 2) | (true, 3) | (false, 3));
             new.data.push(new_val);
         }
         Some(new)
@@ -73,7 +71,7 @@ impl From<io::Lines<io::BufReader<File>>> for LifeState {
                 Ok(line) => {
                     ret.height += 1;
                     let mut line_bools: Vec<bool> = line.chars().map(|c| c == 'X').collect();
-                    if line_bools.len() != 0 {
+                    if !line_bools.is_empty() {
                         ret.width = line_bools.len();
                         ret.data.append(&mut line_bools)
                     }
@@ -98,11 +96,11 @@ impl fmt::Display for LifeState {
         let mut ret = String::new();
         for (i, cell) in self.data.iter().enumerate() {
             match *cell {
-                true => ret.push_str("X"),
-                false => ret.push_str("."),
+                true => ret.push('X'),
+                false => ret.push('.'),
             }
             if i % self.width == self.width - 1 {
-                ret.push_str("\n");
+                ret.push('\n');
             }
         }
         write!(f, "{}", ret)
@@ -130,7 +128,9 @@ fn main() -> Result<(), &'static str> {
     // create init state
     let mut life = LifeState::from(lines);
     // loop
-    let life = life.next().unwrap();
+    for _ in 0..iterations.unwrap() {
+        life = life.next().unwrap();
+    }
     // print result
     print!("{}", life);
     Ok(())
