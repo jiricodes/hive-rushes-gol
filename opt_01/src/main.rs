@@ -18,22 +18,15 @@ const NEIGHBORS: [(i64, i64); 8] = [
 struct LifeState {
     width: usize,
     height: usize,
-    data: Vec<bool>,
+    data: Vec<Vec<bool>>,
 }
 
 impl LifeState {
-    fn neighbours_count(&self, i: usize) -> u8 {
+    fn neighbours_count(&self, x: i64, y: i64) -> u8 {
         let mut ret = 0;
-        let x = (i % self.width) as i64;
-        let y = (i / self.height) as i64;
         for (nx, ny) in NEIGHBORS {
-            let nx = nx + x;
-            let ny = ny + y;
-            if nx >= 0 && nx < self.width as i64 && ny >= 0 && ny < self.height as i64 {
-                match self.data[nx as usize + ny as usize * self.width] {
-                    true => ret += 1,
-                    false => {}
-                }
+            if self.data[(nx + x) as usize][(ny + y) as usize] {
+                ret += 1
             }
         }
         ret
@@ -44,16 +37,16 @@ impl Iterator for LifeState {
     type Item = LifeState;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut new = LifeState {
-            width: self.width,
-            height: self.height,
-            data: Vec::with_capacity(self.data.len()),
-        };
-        for (i, val) in self.data.iter().enumerate() {
-            let neighbours_count = self.neighbours_count(i);
-            // Cargo clippy sugestion over match expression
-            let new_val = matches!((val, neighbours_count), (true, 2) | (true, 3) | (false, 3));
-            new.data.push(new_val);
+        let mut new = self.clone();
+        for y in 1..(self.height - 1) as i64 {
+            for x in 1..(self.width - 1) as i64 {
+                let neighbours_count = self.neighbours_count(x, y);
+                let new_val = matches!(
+                    (self.data[x as usize][y as usize], neighbours_count),
+                    (true, 2) | (true, 3) | (false, 3)
+                );
+                new.data[x as usize][y as usize] = new_val;
+            }
         }
         Some(new)
     }
@@ -72,13 +65,51 @@ impl From<io::Lines<io::BufReader<File>>> for LifeState {
                     ret.height += 1;
                     let mut line_bools: Vec<bool> = line.chars().map(|c| c == 'X').collect();
                     if !line_bools.is_empty() {
+                        line_bools.insert(0, false);
+                        line_bools.push(false);
                         ret.width = line_bools.len();
-                        ret.data.append(&mut line_bools)
+                        ret.data.push(line_bools)
                     }
                 }
                 Err(e) => panic!("{}", e),
             }
         }
+        ret.data.insert(0, vec![false; ret.width]);
+        ret.data.push(vec![false; ret.width]);
+        ret.height += 2;
+        assert!(
+            ret.width <= std::i64::MAX as usize,
+            "The state width is bigger than i64::MAX"
+        );
+        assert!(
+            ret.height <= std::i64::MAX as usize,
+            "The state height is bigger than i64::MAX"
+        );
+        ret
+    }
+}
+
+impl From<&str> for LifeState {
+    fn from(s: &str) -> Self {
+        let lines = s.split("\n");
+        let mut ret = LifeState {
+            width: 0,
+            height: 0,
+            data: Vec::with_capacity(lines.size_hint().0 * 100),
+        };
+        for line in lines {
+            ret.height += 1;
+            let mut line_bools: Vec<bool> = line.chars().map(|c| c == 'X').collect();
+            if !line_bools.is_empty() {
+                line_bools.insert(0, false);
+                line_bools.push(false);
+                ret.width = line_bools.len();
+                ret.data.push(line_bools)
+            }
+        }
+        ret.data.insert(0, vec![false; ret.width]);
+        ret.data.push(vec![false; ret.width]);
+        ret.height += 2;
         assert!(
             ret.width <= std::i64::MAX as usize,
             "The state width is bigger than i64::MAX"
@@ -94,14 +125,15 @@ impl From<io::Lines<io::BufReader<File>>> for LifeState {
 impl fmt::Display for LifeState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut ret = String::new();
-        for (i, cell) in self.data.iter().enumerate() {
-            match *cell {
-                true => ret.push('X'),
-                false => ret.push('.'),
+        for (i, line) in self.data.iter().enumerate() {
+            if i == 0 || i == self.height - 1 {
+                continue;
             }
-            if i % self.width == self.width - 1 {
-                ret.push('\n');
+            let mut line_string: String = line.iter().map(|x| if *x { 'X' } else { '.' }).collect();
+            if i != self.height - 2 {
+                line_string.push('\n');
             }
+            ret.push_str(&line_string);
         }
         write!(f, "{}", ret)
     }
@@ -142,52 +174,50 @@ mod test {
 
     #[test]
     fn neighbours_count() {
-        let mut life = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![false; 9],
-        };
+        let mut life = LifeState::from("...\n...\n...");
 
         // No neighbours
-        for i in 0..9 {
-            assert_eq!(life.neighbours_count(i), 0)
+        for y in 1..4 {
+            for x in 1..4 {
+                assert_eq!(life.neighbours_count(x, y), 0)
+            }
         }
 
         // One
-        life.data[0] = true;
-        assert_eq!(life.neighbours_count(4), 1);
+        life.data[1][1] = true;
+        assert_eq!(life.neighbours_count(2, 2), 1);
 
         // Two
-        life.data[1] = true;
-        assert_eq!(life.neighbours_count(4), 2);
+        life.data[1][2] = true;
+        assert_eq!(life.neighbours_count(2, 2), 2);
 
         // Three
-        life.data[2] = true;
-        assert_eq!(life.neighbours_count(4), 3);
+        life.data[1][3] = true;
+        assert_eq!(life.neighbours_count(2, 2), 3);
 
         // Four
-        life.data[3] = true;
-        assert_eq!(life.neighbours_count(4), 4);
+        life.data[2][1] = true;
+        assert_eq!(life.neighbours_count(2, 2), 4);
 
         // Four (shouldn't consider self)
-        life.data[4] = true;
-        assert_eq!(life.neighbours_count(4), 4);
+        life.data[2][2] = true;
+        assert_eq!(life.neighbours_count(2, 2), 4);
 
         // Five
-        life.data[5] = true;
-        assert_eq!(life.neighbours_count(4), 5);
+        life.data[2][3] = true;
+        assert_eq!(life.neighbours_count(2, 2), 5);
 
         // Six
-        life.data[6] = true;
-        assert_eq!(life.neighbours_count(4), 6);
+        life.data[3][1] = true;
+        assert_eq!(life.neighbours_count(2, 2), 6);
 
         // Seven
-        life.data[7] = true;
-        assert_eq!(life.neighbours_count(4), 7);
+        life.data[3][2] = true;
+        assert_eq!(life.neighbours_count(2, 2), 7);
 
         // Eight
-        life.data[8] = true;
-        assert_eq!(life.neighbours_count(4), 8);
+        life.data[3][3] = true;
+        assert_eq!(life.neighbours_count(2, 2), 8);
     }
 
     #[test]
@@ -195,28 +225,16 @@ mod test {
         // ...
         // XXX
         // ...
-        let mut life = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![false; 9],
-        };
-
-        life.data[4] = true;
-        life.data[3] = true;
-        life.data[5] = true;
+        let mut life = LifeState::from("...\nXXX\n...");
 
         let init_state = life.clone();
 
         // .X.
         // .X.
         // .X.
-        let life2 = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![false, true, false, false, true, false, false, true, false],
-        };
+        let life2 = LifeState::from(".X.\n.X.\n.X.");
         let mut life = life.next().unwrap();
-        assert_eq!(life.data[4], true);
+        assert_eq!(life.data[2][2], true);
         assert_eq!(life, life2);
 
         // with next iteration the life should return to previous state
@@ -229,34 +247,22 @@ mod test {
         // ...
         // XXX
         // X..
-        let init_state = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![false, false, false, true, true, true, true, false, false],
-        };
+        let init_state = LifeState::from("...\nXXX\nX..");
 
         let mut life = init_state.clone();
 
         // .X.
         // XX.
         // X..
-        let life_next = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![false, true, false, true, true, false, true, false, false],
-        };
+        let life_next = LifeState::from(".X.\nXX.\nX..");
         let mut life = life.next().unwrap();
-        assert_eq!(life.data[4], true); // S3
+        assert_eq!(life.data[2][2], true); // S3
         assert_eq!(life, life_next);
 
         // XX.
         // XX.
         // XX.
-        let life_next = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![true, true, false, true, true, false, true, true, false],
-        };
+        let life_next = LifeState::from("XX.\nXX.\nXX.");
         let life = life.next().unwrap();
         assert_eq!(life, life_next);
     }
@@ -266,23 +272,15 @@ mod test {
         // X..
         // ...
         // X.X
-        let init_state = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![true, false, false, false, false, false, true, false, true],
-        };
+        let init_state = LifeState::from("X..\n...\nX.X");
 
         let mut life = init_state.clone();
         // ...
         // .X.
         // ...
-        let life_next = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![false, false, false, false, true, false, false, false, false],
-        };
+        let life_next = LifeState::from("...\n.X.\n...");
         let life = life.next().unwrap();
-        assert_eq!(life.data[4], true); // B3
+        assert_eq!(life.data[2][2], true); // B3
         assert_eq!(life, life_next);
     }
 
@@ -295,114 +293,84 @@ mod test {
         // ...
         // .X.
         // ...
-        let mut life = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![false, false, false, false, true, false, false, false, false],
-        };
+        let mut life = LifeState::from("...\n.X.\n...");
 
         let life = life.next().unwrap();
-        assert_eq!(life.data[4], false); // L0
+        assert_eq!(life.data[2][2], false); // L0
 
         // L1 -> D
         // X..
         // .X.
         // ...
-        let mut life = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![true, false, false, false, true, false, false, false, false],
-        };
+        let mut life = LifeState::from("X..\n.X.\n...");
 
         let life = life.next().unwrap();
-        assert_eq!(life.data[4], false); // L1
+        assert_eq!(life.data[2][2], false); // L1
 
         // L4 -> D
         // XXX
         // XX.
         // ...
-        let mut life = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![true, true, true, true, true, false, false, false, false],
-        };
+        let mut life = LifeState::from("XXX\nXX.\n...");
 
         let life = life.next().unwrap();
-        assert_eq!(life.data[4], false); // L4
+        assert_eq!(life.data[2][2], false); // L4
 
         // L5 -> D
         // XXX
         // XXX
         // ...
-        let mut life = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![true, true, true, true, true, true, false, false, false],
-        };
+        let mut life = LifeState::from("XXX\nXXX\n...");
 
         let life = life.next().unwrap();
-        assert_eq!(life.data[4], false); // L5
+        assert_eq!(life.data[2][2], false); // L5
 
         // L6 -> D
         // XXX
         // XXX
         // X..
-        let mut life = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![true, true, true, true, true, true, true, false, false],
-        };
+        let mut life = LifeState::from("XXX\nXXX\nX..");
 
         let life = life.next().unwrap();
-        assert_eq!(life.data[4], false); // L6
+        assert_eq!(life.data[2][2], false); // L6
 
         // L7 -> D
         // XXX
         // XXX
         // XX.
-        let mut life = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![true, true, true, true, true, true, true, true, false],
-        };
+        let mut life = LifeState::from("XXX\nXXX\nXX.");
 
         let life = life.next().unwrap();
-        assert_eq!(life.data[4], false); // L7
+        assert_eq!(life.data[2][2], false); // L7
 
         // L8 -> D
         // XXX
         // XXX
         // XXX
-        let mut life = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![true, true, true, true, true, true, true, true, true],
-        };
+        let mut life = LifeState::from("XXX\nXXX\nXXX");
 
         let life = life.next().unwrap();
-        assert_eq!(life.data[4], false); // L8
+        assert_eq!(life.data[2][2], false); // L8
 
         // Dead stays dead loop
         // ...
         // ...
         // ...
-        let mut init_state = LifeState {
-            width: 3,
-            height: 3,
-            data: vec![false; 9],
-        };
+        let mut init_state = LifeState::from("...\n...\n...");
 
         for i in 0..9 {
-            if i != 4 {
-                init_state.data[i] = true;
+            let x = i % 3 + 1;
+            let y = i / 3 + 1;
+            if !(x == 2 && y == 2) {
+                init_state.data[x][y] = true;
             }
             let life = init_state.next().unwrap();
             // the cell should remain dead if i != 2 aka neighbours_count is != 3
             if i != 2 {
-                assert_eq!(life.data[4], false);
+                assert_eq!(life.data[2][2], false);
             } else {
                 // we can check the rule here, why not
-                assert_eq!(life.data[4], true);
+                assert_eq!(life.data[2][2], true);
             }
         }
     }
