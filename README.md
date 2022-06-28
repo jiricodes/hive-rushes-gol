@@ -52,7 +52,13 @@ sys	0m0.461s
 ### [opt_01](opt_01/)
 According to [flamegraph](https://github.com/flamegraph-rs/flamegraph) the `simple` version spent 93% of the time in [`neighbours_count()`](simple/src/main.rs)[line 25]. So this version tries to iprove that.
 
+The improvement was achieved by padding the board with always false "frame" and using 2D array (1D would work too, but the benefits are doubtful. Maybe for future version). This way we can ommit boundary checking and simply unroll the 'neighbours_count()' loop. Additionally, the field representation was changed to `u8` per cell from `bool` in order to save on some casting (this change is speculative whether it brought any improvements).
+
 real	0m39.539s
 user	0m39.333s
 sys	0m0.201s
 
+### [opt_02](opt_02/)
+Double buffer version.
+
+The call stack and memory 

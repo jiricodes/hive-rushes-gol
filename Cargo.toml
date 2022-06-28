@@ -1,5 +1,5 @@
 [workspace]
-members = ["simple", "opt_01"]
+members = ["simple", "opt_01", "opt_02", "bitboards"]
 
-[profile.release]
-debug = true
+# [profile.release]
+# debug = true

@@ -3,43 +3,45 @@ use std::fmt;
 use std::fs::File;
 use std::io::{self, BufRead};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 struct LifeState {
     width: usize,
     height: usize,
-    data: Vec<Vec<u8>>,
+    last: Vec<Vec<u8>>,
+    current: Vec<Vec<u8>>,
 }
 
 impl LifeState {
     fn neighbours_count(&self, x: usize, y: usize) -> u8 {
         // This is safe, because of the padding introduced
-        self.data[x - 1][y - 1]
-            + self.data[x][y - 1]
-            + self.data[x + 1][y - 1]
-            + self.data[x - 1][y]
-            + self.data[x + 1][y]
-            + self.data[x - 1][y + 1]
-            + self.data[x][y + 1]
-            + self.data[x + 1][y + 1]
+        self.last[x - 1][y - 1]
+            + self.last[x][y - 1]
+            + self.last[x + 1][y - 1]
+            + self.last[x - 1][y]
+            + self.last[x + 1][y]
+            + self.last[x - 1][y + 1]
+            + self.last[x][y + 1]
+            + self.last[x + 1][y + 1]
     }
-}
 
-impl Iterator for LifeState {
-    type Item = LifeState;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut new = self.clone();
+    fn next(&mut self) {
         for y in 1..(self.height - 1) {
             for x in 1..(self.width - 1) {
                 let neighbours_count = self.neighbours_count(x, y);
                 let new_val = matches!(
-                    (self.data[x][y], neighbours_count),
+                    (self.last[x][y], neighbours_count),
                     (1, 2) | (1, 3) | (0, 3)
                 );
-                new.data[x][y] = new_val.into();
+                self.current[x][y] = new_val.into();
             }
         }
-        Some(new)
+        std::mem::swap(&mut self.last, &mut self.current);
+    }
+}
+
+impl PartialEq for LifeState {
+    fn eq(&self, other: &Self) -> bool {
+        self.width == other.width && self.height == other.height && self.last == other.last
     }
 }
 
@@ -48,7 +50,8 @@ impl From<io::Lines<io::BufReader<File>>> for LifeState {
         let mut ret = LifeState {
             width: 0,
             height: 0,
-            data: Vec::with_capacity(lines.size_hint().0 * 100),
+            last: Vec::with_capacity(lines.size_hint().0 * 100),
+            current: Vec::new(),
         };
         for line_result in lines {
             match line_result {
@@ -60,15 +63,16 @@ impl From<io::Lines<io::BufReader<File>>> for LifeState {
                         line_bools.insert(0, 0);
                         line_bools.push(0);
                         ret.width = line_bools.len();
-                        ret.data.push(line_bools)
+                        ret.last.push(line_bools)
                     }
                 }
                 Err(e) => panic!("{}", e),
             }
         }
-        ret.data.insert(0, vec![0; ret.width]);
-        ret.data.push(vec![0; ret.width]);
+        ret.last.insert(0, vec![0; ret.width]);
+        ret.last.push(vec![0; ret.width]);
         ret.height += 2;
+        ret.current = ret.last.clone();
         ret
     }
 }
@@ -79,7 +83,8 @@ impl From<&str> for LifeState {
         let mut ret = LifeState {
             width: 0,
             height: 0,
-            data: Vec::with_capacity(lines.size_hint().0 * 100),
+            last: Vec::with_capacity(lines.size_hint().0 * 100),
+            current: Vec::new(),
         };
         for line in lines {
             ret.height += 1;
@@ -89,12 +94,13 @@ impl From<&str> for LifeState {
                 line_bools.insert(0, 0);
                 line_bools.push(0);
                 ret.width = line_bools.len();
-                ret.data.push(line_bools)
+                ret.last.push(line_bools)
             }
         }
-        ret.data.insert(0, vec![0; ret.width]);
-        ret.data.push(vec![0; ret.width]);
+        ret.last.insert(0, vec![0; ret.width]);
+        ret.last.push(vec![0; ret.width]);
         ret.height += 2;
+        ret.current = ret.last.clone();
         ret
     }
 }
@@ -102,7 +108,7 @@ impl From<&str> for LifeState {
 impl fmt::Display for LifeState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut ret = String::new();
-        for (i, line) in self.data.iter().enumerate() {
+        for (i, line) in self.last.iter().enumerate() {
             if i == 0 || i == self.height - 1 {
                 continue;
             }
@@ -141,10 +147,10 @@ fn main() -> Result<(), &'static str> {
     let mut life = LifeState::from(lines);
     // loop
     for _ in 0..iterations.unwrap() {
-        life = life.next().unwrap();
+        life.next();
     }
     // print result
-    print!("{}", life);
+    // print!("{}", life);
     Ok(())
 }
 
@@ -164,39 +170,39 @@ mod test {
         }
 
         // One
-        life.data[1][1] = 1;
+        life.last[1][1] = 1;
         assert_eq!(life.neighbours_count(2, 2), 1);
 
         // Two
-        life.data[1][2] = 1;
+        life.last[1][2] = 1;
         assert_eq!(life.neighbours_count(2, 2), 2);
 
         // Three
-        life.data[1][3] = 1;
+        life.last[1][3] = 1;
         assert_eq!(life.neighbours_count(2, 2), 3);
 
         // Four
-        life.data[2][1] = 1;
+        life.last[2][1] = 1;
         assert_eq!(life.neighbours_count(2, 2), 4);
 
         // Four (shouldn't consider self)
-        life.data[2][2] = 1;
+        life.last[2][2] = 1;
         assert_eq!(life.neighbours_count(2, 2), 4);
 
         // Five
-        life.data[2][3] = 1;
+        life.last[2][3] = 1;
         assert_eq!(life.neighbours_count(2, 2), 5);
 
         // Six
-        life.data[3][1] = 1;
+        life.last[3][1] = 1;
         assert_eq!(life.neighbours_count(2, 2), 6);
 
         // Seven
-        life.data[3][2] = 1;
+        life.last[3][2] = 1;
         assert_eq!(life.neighbours_count(2, 2), 7);
 
         // Eight
-        life.data[3][3] = 1;
+        life.last[3][3] = 1;
         assert_eq!(life.neighbours_count(2, 2), 8);
     }
 
@@ -213,12 +219,12 @@ mod test {
         // .X.
         // .X.
         let life2 = LifeState::from(".X.\n.X.\n.X.");
-        let mut life = life.next().unwrap();
-        assert_eq!(life.data[2][2], 1);
+        life.next();
+        assert_eq!(life.last[2][2], 1);
         assert_eq!(life, life2);
 
         // with next iteration the life should return to previous state
-        let life = life.next().unwrap();
+        life.next();
         assert_eq!(life, init_state);
     }
 
@@ -235,15 +241,15 @@ mod test {
         // XX.
         // X..
         let life_next = LifeState::from(".X.\nXX.\nX..");
-        let mut life = life.next().unwrap();
-        assert_eq!(life.data[2][2], 1); // S3
+        life.next();
+        assert_eq!(life.last[2][2], 1); // S3
         assert_eq!(life, life_next);
 
         // XX.
         // XX.
         // XX.
         let life_next = LifeState::from("XX.\nXX.\nXX.");
-        let life = life.next().unwrap();
+        life.next();
         assert_eq!(life, life_next);
     }
 
@@ -259,8 +265,8 @@ mod test {
         // .X.
         // ...
         let life_next = LifeState::from("...\n.X.\n...");
-        let life = life.next().unwrap();
-        assert_eq!(life.data[2][2], 1); // B3
+        life.next();
+        assert_eq!(life.last[2][2], 1); // B3
         assert_eq!(life, life_next);
     }
 
@@ -275,8 +281,8 @@ mod test {
         // ...
         let mut life = LifeState::from("...\n.X.\n...");
 
-        let life = life.next().unwrap();
-        assert_eq!(life.data[2][2], 0); // L0
+        life.next();
+        assert_eq!(life.last[2][2], 0); // L0
 
         // L1 -> D
         // X..
@@ -284,8 +290,8 @@ mod test {
         // ...
         let mut life = LifeState::from("X..\n.X.\n...");
 
-        let life = life.next().unwrap();
-        assert_eq!(life.data[2][2], 0); // L1
+        life.next();
+        assert_eq!(life.last[2][2], 0); // L1
 
         // L4 -> D
         // XXX
@@ -293,8 +299,8 @@ mod test {
         // ...
         let mut life = LifeState::from("XXX\nXX.\n...");
 
-        let life = life.next().unwrap();
-        assert_eq!(life.data[2][2], 0); // L4
+        life.next();
+        assert_eq!(life.last[2][2], 0); // L4
 
         // L5 -> D
         // XXX
@@ -302,8 +308,8 @@ mod test {
         // ...
         let mut life = LifeState::from("XXX\nXXX\n...");
 
-        let life = life.next().unwrap();
-        assert_eq!(life.data[2][2], 0); // L5
+        life.next();
+        assert_eq!(life.last[2][2], 0); // L5
 
         // L6 -> D
         // XXX
@@ -311,8 +317,8 @@ mod test {
         // X..
         let mut life = LifeState::from("XXX\nXXX\nX..");
 
-        let life = life.next().unwrap();
-        assert_eq!(life.data[2][2], 0); // L6
+        life.next();
+        assert_eq!(life.last[2][2], 0); // L6
 
         // L7 -> D
         // XXX
@@ -320,8 +326,8 @@ mod test {
         // XX.
         let mut life = LifeState::from("XXX\nXXX\nXX.");
 
-        let life = life.next().unwrap();
-        assert_eq!(life.data[2][2], 0); // L7
+        life.next();
+        assert_eq!(life.last[2][2], 0); // L7
 
         // L8 -> D
         // XXX
@@ -329,8 +335,8 @@ mod test {
         // XXX
         let mut life = LifeState::from("XXX\nXXX\nXXX");
 
-        let life = life.next().unwrap();
-        assert_eq!(life.data[2][2], 0); // L8
+        life.next();
+        assert_eq!(life.last[2][2], 0); // L8
 
         // Dead stays dead loop
         // ...
@@ -342,15 +348,16 @@ mod test {
             let x = i % 3 + 1;
             let y = i / 3 + 1;
             if !(x == 2 && y == 2) {
-                init_state.data[x][y] = 1;
+                init_state.last[x][y] = 1;
             }
-            let life = init_state.next().unwrap();
+            let mut life = init_state.clone();
+            life.next();
             // the cell should remain dead if i != 2 aka neighbours_count is != 3
             if i != 2 {
-                assert_eq!(life.data[2][2], 0);
+                assert_eq!(life.last[2][2], 0);
             } else {
                 // we can check the rule here, why not
-                assert_eq!(life.data[2][2], 1);
+                assert_eq!(life.last[2][2], 1);
             }
         }
     }
