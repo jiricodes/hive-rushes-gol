@@ -61,4 +61,5 @@ sys	0m0.201s
 ### [opt_02](opt_02/)
 Double buffer version.
 
-The call stack and memory 
+### [bitboards](bitboards/)
+Implementation created by [exrok](https://github.com/exrok) and included here only for educational purposes.

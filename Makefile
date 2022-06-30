@@ -6,7 +6,7 @@
 #    By: jnovotny <jnovotny@student.hive.fi>        +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2022/06/28 09:32:05 by jnovotny          #+#    #+#              #
-#    Updated: 2022/06/28 13:27:41 by jnovotny         ###   ########.fr        #
+#    Updated: 2022/06/30 17:27:05 by jnovotny         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -54,6 +54,13 @@ run-opt_02:
 	cargo build -p opt_02 --release
 	cp target/release/opt_02 $(BIN_DIR)
 	(cd resources; ./test.sh ../$(BIN_DIR)/opt_02)
+
+run-bitboards:
+	cargo test -p bitboards
+	make folders $(MAKEOPTS)
+	cargo build -p bitboards --release
+	cp target/release/bitboards $(BIN_DIR)
+	(cd resources; ./test.sh ../$(BIN_DIR)/bitboards)
 
 clean:
 	cargo clean

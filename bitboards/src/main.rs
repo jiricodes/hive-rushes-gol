@@ -1,3 +1,6 @@
+//! Original creator [exrok](https://github.com/exrok), no license specified.
+//! reimplemented just for testing and learning purposes
+
 use std::env;
 use std::fmt;
 use std::fs::File;
@@ -37,8 +40,72 @@ impl LifeState {
         self.grid[i] |= 0b1 << offset;
     }
 
-    fn next(&mut self) {
-        todo!()
+    /// computes the generation of the grid in place.
+    pub fn tick(&mut self) {
+        /// computes the generation of column. Assumes that the most and least significant
+        /// bits of the clusters store the state of the adjacent cells.
+        fn tick_column(column: &mut [Cluster]) {
+            fn tick_cluster(cluster: &mut Cluster, above: Cluster, below: Cluster) {
+                let bit_sum = |a, b, c| (a ^ b ^ c, a & b | a & c | b & c);
+                let (ix, iy) = bit_sum(above, *cluster, below);
+                let (ax, ay) = bit_sum(ix << 1, above ^ below, ix >> 1);
+                let (bx, by) = bit_sum(iy << 1, above & below, iy >> 1);
+                *cluster |= ax; // three (odd_total /w the condition below)
+                *cluster &= (ay ^ bx) & !by; // two_or_three_mod4 & !more_than_three
+            }
+
+            let mut clusters = column.iter_mut();
+            let mut curr = if let Some(c) = clusters.next() {
+                c
+            } else {
+                return;
+            };
+            let mut above = 0;
+
+            for below in clusters {
+                let tmp = *curr;
+                tick_cluster(&mut curr, above, *below);
+                above = tmp;
+                curr = below;
+            }
+            tick_cluster(&mut curr, above, 0);
+        }
+
+        let edge_mask = 0x8000_0000_0000_0001;
+        //tail_mask is used to zero extra width in the last rowsumn
+        let tail_width = (self.width + CLUSTER_SIZE - 1) % CLUSTER_SIZE + 1;
+        let tail_mask = edge_mask | (!1u64 << tail_width);
+        let mut columns = self.grid.chunks_exact_mut(self.height);
+        let mut prev = columns.next().unwrap();
+
+        // Store the next and prev cell of the adjacent clusters of each column into
+        // the temporary cells in each cluster. Once we have set&extracted the outer
+        // cells of each column we progress to the next state w/ tick_column.
+        if let Some(mut curr) = columns.next() {
+            for (first, second) in prev.iter_mut().zip(curr.iter()) {
+                *first ^= ((second << CLUSTER_SIZE) ^ *first) & edge_mask;
+            }
+
+            for next in columns {
+                for ((left, mid), right) in prev.iter().zip(curr.iter_mut()).zip(next.iter()) {
+                    *mid ^= (((left >> CLUSTER_SIZE) | (right << CLUSTER_SIZE)) ^ *mid) & edge_mask
+                }
+                tick_column(prev);
+                prev = curr;
+                curr = next;
+            }
+
+            for (left, last) in prev.iter().zip(curr.iter_mut()) {
+                *last ^= ((left >> CLUSTER_SIZE) ^ *last) & tail_mask;
+            }
+            tick_column(curr);
+        } else {
+            for f in prev.iter_mut() {
+                //Update bounds on the single column
+                *f &= !tail_mask;
+            }
+        }
+        tick_column(prev);
     }
 }
 
@@ -155,11 +222,11 @@ fn main() -> Result<(), &'static str> {
     // create init state
     let mut life = LifeState::from(lines);
     // loop
-    // for _ in 0..iterations.unwrap() {
-    //     life.next();
-    // }
+    for _ in 0..iterations.unwrap() {
+        life.tick();
+    }
     // print result
-    print!("{}", life);
+    // print!("{}", life);
     Ok(())
 }
 
@@ -192,19 +259,35 @@ mod test {
     }
 
     #[test]
+    fn setter() {
+        let mut life = LifeState::new(5, 5);
+        life.set(2, 2);
+        assert!(life.is_alive(2, 2));
+        assert!(!life.is_alive(1, 2));
+    }
+
+    #[test]
     fn rule_s2() {
         // ...
         // XXX
         // ...
-        let mut life = LifeState::from("...\nXXX\n...");
+        let init_life = LifeState::from("...\nXXX\n...");
+        let mut life = init_life.clone();
 
         // .X.
         // .X.
         // .X.
         let life2 = LifeState::from(".X.\n.X.\n.X.");
         assert_ne!(life, life2);
+        life.tick();
+        println!("{}", life);
+
+        assert!(life.is_alive(1, 1));
+        assert_eq!(life, life2);
 
         // with next iteration the life should return to previous state
+        life.tick();
+        assert_eq!(life, init_life);
     }
 
     #[test]
@@ -212,17 +295,23 @@ mod test {
         // ...
         // XXX
         // X..
-        let life = LifeState::from("...\nXXX\nX..");
+        let mut life = LifeState::from("...\nXXX\nX..");
 
         // .X.
         // XX.
         // X..
-        let life = LifeState::from(".X.\nXX.\nX..");
+        let life2 = LifeState::from(".X.\nXX.\nX..");
+        life.tick();
+        assert!(life.is_alive(1, 1));
+        assert_eq!(life, life2);
 
         // XX.
         // XX.
         // XX.
-        let life = LifeState::from("XX.\nXX.\nXX.");
+        let life3 = LifeState::from("XX.\nXX.\nXX.");
+        life.tick();
+        assert!(life.is_alive(1, 1));
+        assert_eq!(life, life3);
     }
 
     #[test]
@@ -230,12 +319,15 @@ mod test {
         // X..
         // ...
         // X.X
-        let life = LifeState::from("X..\n...\nX.X");
+        let mut life = LifeState::from("X..\n...\nX.X");
 
         // ...
         // .X.
         // ...
-        let life = LifeState::from("...\n.X.\n...");
+        let life2 = LifeState::from("...\n.X.\n...");
+        life.tick();
+        assert!(life.is_alive(1, 1));
+        assert_eq!(life, life2);
     }
 
     /// Tests that the results outside of ruleset work
@@ -248,42 +340,56 @@ mod test {
         // .X.
         // ...
         let mut life = LifeState::from("...\n.X.\n...");
+        life.tick();
+        assert!(!life.is_alive(1, 1));
 
         // L1 -> D
         // X..
         // .X.
         // ...
         let mut life = LifeState::from("X..\n.X.\n...");
+        life.tick();
+        assert!(!life.is_alive(1, 1));
 
         // L4 -> D
         // XXX
         // XX.
         // ...
         let mut life = LifeState::from("XXX\nXX.\n...");
+        life.tick();
+        assert!(!life.is_alive(1, 1));
 
         // L5 -> D
         // XXX
         // XXX
         // ...
         let mut life = LifeState::from("XXX\nXXX\n...");
+        life.tick();
+        assert!(!life.is_alive(1, 1));
 
         // L6 -> D
         // XXX
         // XXX
         // X..
         let mut life = LifeState::from("XXX\nXXX\nX..");
+        life.tick();
+        assert!(!life.is_alive(1, 1));
 
         // L7 -> D
         // XXX
         // XXX
         // XX.
         let mut life = LifeState::from("XXX\nXXX\nXX.");
+        life.tick();
+        assert!(!life.is_alive(1, 1));
 
         // L8 -> D
         // XXX
         // XXX
         // XXX
         let mut life = LifeState::from("XXX\nXXX\nXXX");
+        life.tick();
+        assert!(!life.is_alive(1, 1));
 
         // Dead stays dead loop
         // ...
@@ -291,21 +397,22 @@ mod test {
         // ...
         let mut init_state = LifeState::from("...\n...\n...");
 
-        // for i in 0..9 {
-        //     let x = i % 3 + 1;
-        //     let y = i / 3 + 1;
-        //     if !(x == 2 && y == 2) {
-        //         init_state.last[x][y] = 1;
-        //     }
-        //     let mut life = init_state.clone();
-        //     life.next();
-        //     // the cell should remain dead if i != 2 aka neighbours_count is != 3
-        //     if i != 2 {
-        //         assert_eq!(life.last[2][2], 0);
-        //     } else {
-        //         // we can check the rule here, why not
-        //         assert_eq!(life.last[2][2], 1);
-        //     }
-        // }
+        for i in 0..9 {
+            let x = i % 3;
+            let y = i / 3;
+            if !(x == 1 && y == 1) {
+                init_state.set(x, y);
+            }
+            println!("{}", init_state);
+            let mut life = init_state.clone();
+            life.tick();
+            // the cell should remain dead if i != 2 aka neighbours_count is != 3
+            if i != 2 {
+                assert!(!life.is_alive(1, 1));
+            } else {
+                // we can check the rule here, why not
+                assert!(life.is_alive(1, 1));
+            }
+        }
     }
 }
